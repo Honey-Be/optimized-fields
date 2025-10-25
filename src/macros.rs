@@ -12,7 +12,7 @@ macro_rules! field_compare {
     (prime; $test_name:expr; $mod_name:ident; $( $field:ident ),+) => {
         mod $mod_name {
             use super::*;
-            use ark_ff::{Field, PrimeField, UniformRand, BigInteger};
+            use ark_ff::{Field, PrimeField, UniformRand, BigInteger, AdditiveGroup};
             use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 
             fn bench_compare(c: &mut Criterion) {

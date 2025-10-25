@@ -8,7 +8,7 @@
 //! * Field arithmetic in this field can be implemented using a few 32-bit
 //!   addition, subtractions, and shifts.
 
-use ark_ff::{BigInt, FftField, Field, LegendreSymbol, One, PrimeField, SqrtPrecomputation, Zero};
+use ark_ff::{BigInt, FftField, Field, LegendreSymbol, One, PrimeField, SqrtPrecomputation, Zero, AdditiveGroup};
 use ark_serialize::{
     buffer_byte_size, CanonicalDeserialize, CanonicalDeserializeWithFlags, CanonicalSerialize,
     CanonicalSerializeWithFlags, Compress, EmptyFlags, Flags, SerializationError, Valid, Validate,
@@ -88,15 +88,18 @@ impl Fp {
     }
 }
 
+impl AdditiveGroup for Fp {
+    type Scalar = Self;
+
+    const ZERO: Self = Self(0);
+}
+
 impl Field for Fp {
     type BasePrimeField = Self;
-    type BasePrimeFieldIter = core::iter::Once<Self::BasePrimeField>;
 
     const SQRT_PRECOMP: Option<SqrtPrecomputation<Self>> = Some(SqrtPrecomputation::Case3Mod4 {
         modulus_plus_one_div_four: &[(MODULUS as u64 + 1) / 4],
     });
-
-    const ZERO: Self = Self(0);
 
     const ONE: Self = Self(1);
 
@@ -108,35 +111,24 @@ impl Field for Fp {
         elem
     }
 
-    fn to_base_prime_field_elements(&self) -> Self::BasePrimeFieldIter {
+    fn to_base_prime_field_elements(&self) -> impl Iterator<Item = Self::BasePrimeField> {
         core::iter::once(*self)
     }
 
-    fn from_base_prime_field_elems(elems: &[Self::BasePrimeField]) -> Option<Self> {
-        if elems.len() != usize::try_from(Self::extension_degree()).unwrap() {
-            return None;
-        }
-        Some(elems[0])
-    }
-
-    #[inline]
-    fn double(&self) -> Self {
-        let mut temp = *self;
-        temp.double_in_place();
-        temp
-    }
-
-    #[inline]
-    fn double_in_place(&mut self) -> &mut Self {
-        let x = self.0 << 1;
-        self.0 = (x & MODULUS) + (self.0 >> 30);
-        self
-    }
-
-    #[inline]
-    fn neg_in_place(&mut self) -> &mut Self {
-        self.0 = MODULUS - self.0;
-        self
+    fn from_base_prime_field_elems(
+        elems: impl IntoIterator<Item = Self::BasePrimeField>,
+    ) -> Option<Self> {
+        let mut iter = elems.into_iter();
+        let result = if let Some(result) = iter.next() {
+            if let None = iter.next() {
+                Some(result)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        result        
     }
 
     #[inline]
@@ -209,6 +201,10 @@ impl Field for Fp {
         } else {
             LegendreSymbol::QuadraticNonResidue
         }
+    }
+    
+    fn mul_by_base_prime_field(&self, elem: &Self::BasePrimeField) -> Self {
+        *self * elem
     }
 }
 
@@ -598,7 +594,6 @@ impl Display for Fp {
 impl Neg for Fp {
     type Output = Self;
     #[inline]
-    #[must_use]
     fn neg(mut self) -> Self {
         Self::neg_in_place(&mut self);
         self
